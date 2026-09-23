@@ -17,59 +17,59 @@ Data-layer playbook for the **Database Engineer** role. It does not replace `sup
 
 ## When to use
 
-- Desain/ubah schema, ERD, **relasi**, constraint, **index**
-- Migration / seeder (Laravel `database/migrations`, SQL generik, dll.)
-- **Performance**: pagination di DB, anti-N+1, EXPLAIN, index strategy, transaksi pendek
-- Objek DB lanjutan: **VIEW**, **TRIGGER**, **FUNCTION** / procedure (bila stack mengizinkan)
-- Tabel **mapping / junction / `_mp`** (N:M dan pemetaan referensi)
-- Integritas data, unique/FK, cascade, soft-delete vs hard-delete
-- PostgreSQL (default Phase 1 house) atau MySQL/MariaDB bila stack project memakai itu
-- Review perubahan DB sebelum Backend mengikat API
+- Design/change schema, ERD, **relations**, constraints, **indexes**
+- Migration / seeder (Laravel `database/migrations`, generic SQL, etc.)
+- **Performance**: DB pagination, anti-N+1, EXPLAIN, index strategy, short transactions
+- Advanced DB objects: **VIEW**, **TRIGGER**, **FUNCTION** / procedure (when stack allows)
+- **Mapping / junction / `_mp`** tables (N:M and reference mapping)
+- Data integrity, unique/FK, cascade, soft-delete vs hard-delete
+- PostgreSQL (default Phase 1 house) or MySQL/MariaDB when project stack uses it
+- Review DB changes before Backend binds API
 
 ## When not to use
 
-- Hanya business logic / API contract -> Backend / Tech Lead
-- Hanya UI list/filter -> Frontend
-- Operasi container DB saja tanpa schema -> `container-docker-ops`
-- Edge functions / Supabase CLI spesifik -> `supabase-cli`
-- Kebijakan auth/secret global tanpa perubahan schema -> `security`
-- Memindahkan seluruh domain workflow ke trigger tanpa ADR (anti-pattern)
+- Business logic / API contract only -> Backend / Tech Lead
+- UI list/filter only -> Frontend
+- DB container operations without schema -> `container-docker-ops`
+- Edge functions / Supabase CLI specific -> `supabase-cli`
+- Global auth/secret policy without schema change -> `security`
+- Moving entire domain workflow to triggers without ADR (anti-pattern)
 
 ## Procedure
 
-1. **Context** - Baca SRS/architecture data (`docs/architecture/database-design.md` bila ada), `PROJECT.md`, rule `database` + `security` + `coding`.
-2. **Model** - Entitas, PK/FK, kardinalitas, normalisasi (3NF; denormalisasi sadar + terdokumentasi). Sertakan mapping/`_mp` untuk N:M.
-3. **Relations** - FK di DB; cascade default restrict; pivot/mapping punya unique composite.
-4. **Migrate** - Satu concern per migration; **up + down**; incremental; jangan edit migration yang sudah di-apply di shared env.
-5. **Index** - FK, filter/join/sort hot path; composite berurutan benar; ukur sebelum index spekulatif.
-6. **Performance gate** - Setiap perubahan schema/query: pastikan path baca/tulis utama tetap efisien (index, pagination, transaksi pendek, no full-scan yang bisa dihindari).
-7. **Views / functions / triggers** - Hanya jika ada alasan jelas (lihat `reference.md`); versioned di migration; down menghapus objek; dokumentasikan side-effect.
-8. **Seed** - Master/reference saja; bukan data transaksi produksi.
-9. **Security** - Parameterized / builder / Eloquent; least-privilege; tidak log PII/secret.
-10. **Verify** - migrate + rollback smoke; relasi tidak orphan; EXPLAIN untuk query kritis bila diubah; docs di `project/{id}/docs/` saat E2E.
-11. **Handoff** - Path migration/seeder/DDL objek, risiko rollback, catatan index & performa.
+1. **Context** - Read SRS/architecture data (`docs/architecture/database-design.md` if available), `PROJECT.md`, rules `database` + `security` + `coding`.
+2. **Model** - Entities, PK/FK, cardinality, normalization (3NF; deliberate denormalization + documented). Include mapping/`_mp` for N:M.
+3. **Relations** - FK in DB; cascade default restrict; pivot/mapping has unique composite.
+4. **Migrate** - One concern per migration; **up + down**; incremental; do not edit migrations already applied in shared env.
+5. **Index** - FK, filter/join/sort hot paths; correct composite column order; measure before speculative indexes.
+6. **Performance gate** - Every schema/query change: ensure main read/write paths stay efficient (index, pagination, short transactions, no avoidable full scans).
+7. **Views / functions / triggers** - Only with clear rationale (see `reference.md`); versioned in migration; down removes objects; document side effects.
+8. **Seed** - Master/reference only; not production transaction data.
+9. **Security** - Parameterized / builder / Eloquent; least-privilege; do not log PII/secrets.
+10. **Verify** - migrate + rollback smoke; relations not orphaned; EXPLAIN for critical queries if changed; docs in `project/{id}/docs/` during E2E.
+11. **Handoff** - Migration/seeder/DDL object paths, rollback risk, index & performance notes.
 
 Detail: `reference.md`.
 
 ## Quality bar
 
-- **Performance terjaga**: tidak merusak hot path; index & pagination selaras akses data
-- Relasi & mapping eksplisit di DB (bukan hanya di ORM)
-- VIEW/FUNCTION/TRIGGER idempotent di migration, terdokumentasi, reversible
-- Naming konsisten; tidak ada schema/kolom mati
-- Performa + integritas setara prioritas dengan "jalan dulu"
-- Selaras rule `coding` (header file **baru** saja)
+- **Performance maintained**: do not break hot paths; index & pagination aligned with data access
+- Relations & mapping explicit in DB (not only in ORM)
+- VIEW/FUNCTION/TRIGGER idempotent in migration, documented, reversible
+- Consistent naming; no dead schema/columns
+- Performance + integrity equal priority with "make it work first"
+- Aligned with `coding` rule (**new** file headers only)
 
 ## DoD
 
-- [ ] Migration apply + rollback smoke OK (atau blocker eksplisit)
-- [ ] Relasi, mapping/`_mp`, dan constraint sesuai design; tidak orphan by design
-- [ ] Index untuk path query utama ada / terukur
-- [ ] Performance gate: tidak ada regresi sadar pada list/join/write utama
-- [ ] VIEW/TRIGGER/FUNCTION (jika ada) punya migration up/down + catatan perilaku
-- [ ] Seeder (jika ada) hanya master/reference
-- [ ] Keamanan data layer dicek
-- [ ] Handoff Backend lengkap (path + risiko)
+- [ ] Migration apply + rollback smoke OK (or explicit blocker)
+- [ ] Relations, mapping/`_mp`, and constraints match design; not orphaned by design
+- [ ] Indexes for main query paths exist / measured
+- [ ] Performance gate: no known regression on main list/join/write paths
+- [ ] VIEW/TRIGGER/FUNCTION (if any) have migration up/down + behavior notes
+- [ ] Seeder (if any) master/reference only
+- [ ] Data layer security checked
+- [ ] Backend handoff complete (path + risk)
 
 ## Attribution
 

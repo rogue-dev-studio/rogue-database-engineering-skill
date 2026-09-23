@@ -4,224 +4,224 @@ Companion to `SKILL.md`. Progressive disclosure: consult this document for imple
 
 ## 1. Schema & naming
 
-| Item | Standar |
+| Item | Standard |
 |------|---------|
 | Table | `snake_case`, plural (`users`, `order_items`) |
-| Mapping / junction | `snake_case`; boleh sufiks `_mp` / `_map` bila konvensi project memakai itu (`role_permission_mp`) - **konsisten dalam satu project** |
+| Mapping / junction | `snake_case`; may suffix `_mp` / `_map` when the project convention uses it (`role_permission_mp`) — **consistent within one project** |
 | Column | `snake_case` |
-| PK | `id` (bigint/uuid sesuai arsitektur) |
-| FK | `{referenced}_id` mengikuti konvensi project |
+| PK | `id` (bigint/uuid per architecture) |
+| FK | `{referenced}_id` following project convention |
 | Boolean | `is_*` / `has_*` |
 | Timestamps | `created_at`, `updated_at`; soft delete: `deleted_at` |
-| View | `vw_*` atau `*_v` - satu konvensi per project |
-| Function | `fn_*` / schema `app` - satu konvensi per project |
-| Trigger | `trg_{table}_{timing}_{event}` (contoh konsep: `trg_orders_ai_audit`) |
+| View | `vw_*` or `*_v` — one convention per project |
+| Function | `fn_*` / schema `app` — one convention per project |
+| Trigger | `trg_{table}_{timing}_{event}` (concept example: `trg_orders_ai_audit`) |
 
-Wajib per tabel aplikasi: PK + timestamps (kecuali pivot/mapping murni yang disepakati tanpa timestamps).
+Required per application table: PK + timestamps (except pure pivot/mapping agreed without timestamps).
 
-## 2. Normalisasi & denormalisasi
+## 2. Normalization & denormalization
 
 - Default: 3NF
-- Denormalisasi hanya dengan: alasan performa terukur, sumber kebenaran tunggal, catatan di docs architecture
-- Hindari redudansi yang bisa drift
+- Denormalize only with: measured performance rationale, single source of truth, note in architecture docs
+- Avoid redundancy that can drift
 
-## 3. Relationships (relasi)
+## 3. Relationships
 
 - 1:1, 1:N, N:M
-- FK **wajib di DB** (bukan hanya di ORM)
-- On delete/update: default **restrict**; dokumentasikan cascade / set null
-- Setiap FK yang di-join/filter sering -> pertimbangkan index (lihat §5)
+- FK **required in DB** (not only in ORM)
+- On delete/update: default **restrict**; document cascade / set null
+- Every FK joined/filtered often -> consider index (see §5)
 
 ### 3.1 Mapping / junction / `_mp`
 
-Pakai tabel mapping bila:
+Use a mapping table when:
 
-- Relasi **N:M** antar entitas
-- Pemetaan referensi banyak-ke-banyak (role↔permission, user↔group, dll.)
+- **N:M** relationship between entities
+- Many-to-many reference mapping (role↔permission, user↔group, etc.)
 
-Wajib:
+Required:
 
-- Minimal dua FK (+ unique composite pasangan FK)
-- Nama jelas: `{a}_{b}` atau `{a}_{b}_mp` sesuai konvensi project
-- Index pada tiap FK (dan unique pada pasangan)
-- Tidak menyimpan payload transaksi besar di mapping kecuali requirement bilang begitu
-- Kolom ekstra di mapping (mis. `is_active`, `assigned_at`) boleh jika bagian dari relasi, bukan business workflow tersembunyi
+- At least two FKs (+ unique composite pair)
+- Clear name: `{a}_{b}` or `{a}_{b}_mp` per project convention
+- Index on each FK (and unique on the pair)
+- Do not store large transaction payloads in mapping unless requirements say so
+- Extra mapping columns (e.g. `is_active`, `assigned_at`) are OK if part of the relationship, not hidden business workflow
 
-Jangan:
+Do not:
 
-- Duplikasi mapping yang sama dengan nama berbeda
-- Menyimpan array ID di JSON sebagai pengganti mapping tanpa ADR
+- Duplicate the same mapping under different names
+- Store ID arrays in JSON as a mapping substitute without ADR
 
 ## 4. Migrations
 
-- Satu tujuan per file
-- Selalu **down** yang aman
-- Jangan rewrite migration yang sudah di-apply di shared env
-- Urutan: parent -> child -> mapping; drop: mapping/child -> parent
-- Expand -> migrate data -> contract untuk breaking change
-- Laravel: `Schema` builder diutamakan; raw SQL untuk VIEW/FUNCTION/TRIGGER/index ekspresi + alasan singkat
+- One purpose per file
+- Always a safe **down**
+- Do not rewrite migrations already applied in shared env
+- Order: parent -> child -> mapping; drop: mapping/child -> parent
+- Expand -> migrate data -> contract for breaking change
+- Laravel: prefer `Schema` builder; raw SQL for VIEW/FUNCTION/TRIGGER/expression index + brief rationale
 - Smoke: migrate + rollback
 
 ## 5. Index strategy
 
-Buat index jika sering dipakai untuk `WHERE` / `JOIN` / `ORDER BY` / unique bisnis.
+Create an index when frequently used for `WHERE` / `JOIN` / `ORDER BY` / business unique.
 
-Hindari: low-cardinality spekulatif, duplikat PK/unique, urutan composite salah.
+Avoid: speculative low-cardinality, duplicate PK/unique, wrong composite column order.
 
-| Jenis | Kapan |
+| Type | When |
 |-------|--------|
-| B-tree (default) | Equality/range umum |
-| Unique | Natural key bisnis |
-| Composite | Predikat multi-kolom; lead column paling selektif/sering |
-| Partial (PG) | Subset aktif (`WHERE deleted_at IS NULL`) |
-| Covering / include (PG) | Hot read yang terukur |
+| B-tree (default) | General equality/range |
+| Unique | Business natural key |
+| Composite | Multi-column predicates; lead column most selective/frequent |
+| Partial (PG) | Active subset (`WHERE deleted_at IS NULL`) |
+| Covering / include (PG) | Measured hot read |
 
-Produksi besar (Phase 3): pertimbangkan `CREATE INDEX CONCURRENTLY`. Phase 1 local: index biasa OK.
+Large production (Phase 3): consider `CREATE INDEX CONCURRENTLY`. Phase 1 local: normal index OK.
 
 ## 6. Integrity
 
-- Unique bisnis, CHECK bila stabil, validasi app **dan** DB
-- Mapping: unique `(fk_a, fk_b)` untuk cegah duplikat relasi
+- Business unique, CHECK when stable, validation in app **and** DB
+- Mapping: unique `(fk_a, fk_b)` to prevent duplicate relations
 
 ## 7. Seeders
 
-Diizinkan: master role/permission, menu, referensi generik, user bootstrap non-produksi (termasuk baris mapping master).
+Allowed: master role/permission, menu, generic reference, non-production bootstrap users (including master mapping rows).
 
-Dilarang: data transaksi riil, secret, PII riil di repo.
+Forbidden: real transaction data, secrets, real PII in the repo.
 
-Idempotent diutamakan.
+Prefer idempotent seeders.
 
-## 8. Query & performance (wajib dijaga)
+## 8. Query & performance (must maintain)
 
-**Performance gate** pada setiap perubahan data layer:
+**Performance gate** on every data-layer change:
 
-1. Path list/detail/join utama tidak mundur ke sequential scan besar tanpa alasan
-2. List memakai **pagination** (LIMIT/OFFSET atau keyset)
-3. ORM: eager load; larang N+1 di hot path
-4. Transaksi pendek; batch besar dipecah; hindari lock panjang
-5. Tipe data tepat (`numeric` untuk uang; `timestamptz` bila lintas zona)
-6. Hot query: `EXPLAIN (ANALYZE, BUFFERS)` (PG) / `EXPLAIN ANALYZE` (MySQL) sebelum/sesudah tune
-7. VIEW kompleks: pastikan tidak dibungkus berulang tanpa materialisasi sadar
-8. TRIGGER: hitung biaya per row - jangan trigger berat di tabel write-intensif tanpa bukti
+1. Main list/detail/join paths do not regress to large sequential scans without reason
+2. Lists use **pagination** (LIMIT/OFFSET or keyset)
+3. ORM: eager load; forbid N+1 on hot paths
+4. Short transactions; split large batches; avoid long locks
+5. Correct data types (`numeric` for money; `timestamptz` when crossing time zones)
+6. Hot query: `EXPLAIN (ANALYZE, BUFFERS)` (PG) / `EXPLAIN ANALYZE` (MySQL) before/after tuning
+7. Complex VIEWs: ensure not wrapped repeatedly without conscious materialization
+8. TRIGGER: count per-row cost — do not use heavy triggers on write-intensive tables without evidence
 
-Regresi performa yang diketahui -> blocker atau tiket eksplisit, jangan diam-diam merge.
+Known performance regression -> blocker or explicit ticket; do not merge silently.
 
 ## 9. VIEW
 
-**Pakai VIEW** bila:
+**Use VIEW** when:
 
-- Join/baca berulang yang stabil untuk reporting/read model
-- Menyembunyikan kolom sensitif dari role DB tertentu (bersama grants)
-- Kontrak baca yang jarang berubah
+- Stable repeated join/read for reporting/read model
+- Hiding sensitive columns from certain DB roles (with grants)
+- Read contract that rarely changes
 
-**Jangan VIEW** bila:
+**Do not use VIEW** when:
 
-- Menggantikan API/backend untuk business rules yang sering berubah
-- Menyembunyikan N+1 / query buruk di app
+- Replacing API/backend for frequently changing business rules
+- Hiding N+1 / bad queries in the app
 
-Aturan:
+Rules:
 
-- Buat/drop di migration (up/down)
-- Nama + kolom terdokumentasi singkat
-- Prefer non-materialized dulu; **MATERIALIZED VIEW** hanya dengan refresh strategy (cron/job) + index pada MV
-- Jangan `SELECT *` di definisi VIEW produksi
+- Create/drop in migration (up/down)
+- Documented name + columns briefly
+- Prefer non-materialized first; **MATERIALIZED VIEW** only with refresh strategy (cron/job) + index on MV
+- Do not use `SELECT *` in production VIEW definitions
 
 ## 10. FUNCTION / procedure
 
-**Pakai** bila:
+**Use** when:
 
-- Kalkulasi/aturan set-based yang jauh lebih efisien di DB
-- Operasi atomik multi-tabel yang tidak cocok di app tanpa round-trip berlebih
-- Hook yang dipanggil trigger (fungsi trigger)
+- Set-based calculation/rules far more efficient in DB
+- Atomic multi-table operations unsuitable in app without excessive round-trips
+- Hook called by trigger (trigger function)
 
-**Jangan** bila:
+**Do not use** when:
 
-- Seluruh domain service dipindah ke PL/pgSQL tanpa batas
-- Logic yang harus diuji di unit test app tapi tidak ada jalur tes DB
+- Entire domain service moved to PL/pgSQL without bounds
+- Logic that must be unit-tested in app but has no DB test path
 
-Aturan:
+Rules:
 
-- Versioned di migration; `CREATE OR REPLACE` hati-hati dengan perubahan signature -> drop/create di down/up yang jelas
-- `SECURITY INVOKER` default; `SECURITY DEFINER` hanya dengan alasan + search_path ketat
-- Tidak menaruh secret di body fungsi
-- Privilege execute hanya ke role yang perlu
+- Versioned in migration; `CREATE OR REPLACE` careful with signature changes -> clear drop/create in down/up
+- `SECURITY INVOKER` default; `SECURITY DEFINER` only with rationale + strict search_path
+- Do not put secrets in function body
+- Execute privilege only for roles that need it
 
 ## 11. TRIGGER
 
-**Pakai** bila:
+**Use** when:
 
-- Audit trail / timestamp guard yang harus benar meski ada banyak writer
-- Menjaga invariant yang tidak boleh dilanggar walau bypass ORM
-- Sinkron tipis turunan (dengan dokumentasi)
+- Audit trail / timestamp guard must be correct even with many writers
+- Invariants that must hold even when ORM is bypassed
+- Thin derived sync (with documentation)
 
-**Jangan** bila:
+**Do not use** when:
 
-- Workflow bisnis panjang (approval multi-step, notifikasi, call HTTP)
-- Efek samping tersembunyi tanpa docs (sulit di-debug Backend)
+- Long business workflow (multi-step approval, notifications, HTTP calls)
+- Hidden side effects without docs (hard for Backend to debug)
 
-Aturan:
+Rules:
 
-- Satu tanggung jawab per trigger; naming jelas
-- Prefer `AFTER` untuk audit; `BEFORE` untuk normalisasi nilai
-- Hindari trigger berantai dalam (cascade trigger hell)
-- Statement-level vs row-level: pilih sesuai volume
-- Wajib: migration up/down + catatan di architecture/ADR
-- Uji: insert/update/delete sample memastikan efek + performa masih masuk akal
+- One responsibility per trigger; clear naming
+- Prefer `AFTER` for audit; `BEFORE` for value normalization
+- Avoid deep trigger chains (cascade trigger hell)
+- Statement-level vs row-level: choose by volume
+- Required: migration up/down + note in architecture/ADR
+- Test: sample insert/update/delete to confirm effect + performance still reasonable
 
 ## 12. PostgreSQL notes
 
-- Extension hanya jika perlu
-- JSONB bukan pengganti mapping N:M tanpa ADR
-- Partial index untuk subset aktif
-- Jangan matikan autovacuum; waspadai bloat setelah mass update/delete
+- Extensions only when needed
+- JSONB is not an N:M mapping substitute without ADR
+- Partial index for active subset
+- Do not disable autovacuum; watch bloat after mass update/delete
 
 ## 13. MySQL / MariaDB notes
 
 - InnoDB; `utf8mb4`
-- Trigger/procedure syntax berbeda - tulis dialect sesuai engine project
-- Generated columns: hati-hati di down migration
+- Trigger/procedure syntax differs — write dialect for project engine
+- Generated columns: careful in down migration
 
 ## 14. Security (data layer)
 
-- Parameterized only; least privilege; secret di env
-- VIEW/FUNCTION jangan expose kolom sensitif ke role luas
-- TRIGGER audit: jangan tulis secret/token ke log table dalam plain text bila bisa dihindari
-- Soft-delete sensitif: jejak audit jika domain mewajibkan
+- Parameterized only; least privilege; secrets in env
+- VIEW/FUNCTION must not expose sensitive columns to broad roles
+- Audit TRIGGER: do not write secrets/tokens to log table in plain text when avoidable
+- Sensitive soft-delete: audit trail if domain requires it
 
 ## 15. Soft delete & audit
 
-- Soft delete hanya jika perlu restore/history
-- Unique + soft delete: partial unique di PG
-- `created_by` / `updated_by` hanya jika SRS meminta
+- Soft delete only when restore/history is needed
+- Unique + soft delete: partial unique in PG
+- `created_by` / `updated_by` only if SRS requires
 
 ## 16. Multi-service
 
-- Satu service satu DB logical; no cross-DB join
-- Integrasi via API/event
+- One service one logical DB; no cross-DB join
+- Integration via API/event
 
 ## 17. Backup & rollback
 
-- Backup note sebelum migrate destruktif di shared env
-- Rollback: reverse migration atau forward-fix
-- Jangan `down -v` tanpa konfirmasi
+- Backup note before destructive migrate in shared env
+- Rollback: reverse migration or forward-fix
+- Do not `down -v` without confirmation
 
 ## 18. Deliverables checklist
 
-- [ ] Migration (+ down) termasuk VIEW/FUNCTION/TRIGGER/mapping bila dipakai
-- [ ] Relasi + mapping/`_mp` + index notes
-- [ ] Performance gate (EXPLAIN atau alasan setara untuk hot path)
-- [ ] Seeder master (opsional)
+- [ ] Migration (+ down) including VIEW/FUNCTION/TRIGGER/mapping when used
+- [ ] Relationships + mapping/`_mp` + index notes
+- [ ] Performance gate (EXPLAIN or equivalent rationale for hot path)
+- [ ] Master seeder (optional)
 - [ ] ERD / `database-design.md` update
-- [ ] Risiko & urutan deploy
+- [ ] Risk & deploy order
 
 ## 19. Anti-patterns
 
-- Mengubah requirement lewat "tambah kolom saja" tanpa PO/SA
-- Cascade delete masif tanpa analisis
-- Business workflow kompleks hanya di trigger tanpa ADR
-- Mapping duplikat / JSON array ID tanpa desain
-- VIEW/`SELECT *` yang merusak performa
-- FUNCTION `SECURITY DEFINER` longgar
-- Duplicate table "v2" tanpa migrasi data
-- File besar di BYTEA/BLOB tanpa keputusan arsitektur
-- Mengabaikan regresi performa setelah tambah trigger/index salah
+- Changing requirements via "just add a column" without PO/SA
+- Mass cascade delete without analysis
+- Complex business workflow only in trigger without ADR
+- Duplicate mapping / JSON ID array without design
+- VIEW/`SELECT *` that hurts performance
+- Loose `SECURITY DEFINER` FUNCTION
+- Duplicate table "v2" without data migration
+- Large files in BYTEA/BLOB without architecture decision
+- Ignoring performance regression after wrong trigger/index
